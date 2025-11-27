@@ -1,0 +1,75 @@
+- name: SIS 4 - Services and Cron
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: "--- SIS 4: SERVICES AND CRON ---"
+      tags: services
+      block:
+        - name: Create Gunicorn Service File
+          copy:
+            dest: "/etc/systemd/system/tole-gunicorn.service"
+            content: |
+              [Unit]
+              Description=TOLE Gunicorn Daemon
+              After=network.target
+              [Service]
+              User=tole
+              Group=tole_app
+              WorkingDirectory=/var/www/tole
+              ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 tole_project.wsgi:application
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Create Prometheus Service File
+          copy:
+            dest: "/etc/systemd/system/prometheus.service"
+            content: |
+              [Unit]
+              Description=Prometheus Monitoring
+              Wants=network-online.target
+              After=network-online.target
+              [Service]
+              User=prometheus
+              Group=monitoring
+              Type=simple
+              ExecStart=/usr/local/bin/prometheus --config.file /etc/prometheus/prometheus.yml --storage.tsdb.path /var/lib/prometheus/
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Create Grafana Service File
+          copy:
+            dest: "/etc/systemd/system/grafana-server.service"
+            content: |
+              [Unit]
+              Description=Grafana Server
+              After=network.target
+              [Service]
+              User=grafana
+              Group=monitoring
+              Type=simple
+              ExecStart=/usr/local/bin/grafana-server -homepath /usr/local/share/grafana -config /etc/grafana/grafana.ini
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Ensure services are started
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            state: started
+            enabled: yes
+          loop:
+            - tole-gunicorn
+            - prometheus
+            - grafana-server
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes

@@ -1,0 +1,53 @@
+- name: SIS 2 - Users and Permissions
+  hosts: localhost
+  connection: local
+  become: yes
+
+  tasks:
+    - name: "--- SIS 2: USERS AND PERMISSIONS ---"
+      tags: users
+      block:
+        - name: Create groups
+          ansible.builtin.group:
+            name: "{{ item }}"
+            state: present
+            system: yes
+          loop:
+            - tole_app
+            - monitoring
+
+        - name: Create service users
+          ansible.builtin.user:
+            name: "{{ item.name }}"
+            group: "{{ item.group }}"
+            system: yes
+            shell: /bin/false
+            create_home: no
+          loop:
+            - { name: 'tole', group: 'tole_app' }
+            - { name: 'prometheus', group: 'monitoring' }
+            - { name: 'grafana', group: 'monitoring' }
+
+        - name: Create automation_bot
+          ansible.builtin.user:
+            name: automation_bot
+            shell: /bin/bash
+            state: present
+            create_home: yes
+
+        - name: Create directories
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - { path: '/var/www/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/var/log/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/etc/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/var/lib/prometheus', owner: 'prometheus', group: 'monitoring', mode: '0755' }
+            - { path: '/etc/prometheus', owner: 'prometheus', group: 'monitoring', mode: '0755' }
+            - { path: '/var/lib/grafana', owner: 'grafana', group: 'monitoring', mode: '0755' }
+            - { path: '/etc/grafana', owner: 'grafana', group: 'monitoring', mode: '0755' }
+            - { path: '/opt/scripts', owner: 'root', group: 'root', mode: '0755' }
