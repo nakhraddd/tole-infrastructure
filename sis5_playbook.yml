@@ -1,0 +1,187 @@
+- name: Provision TOLE Project Server
+  hosts: localhost
+  connection: local
+  become: yes
+  vars:
+    prometheus_version: "2.53.1"
+    grafana_version: "11.1.0"
+
+  tasks:
+    - name: "--- SIS 2: USERS AND PERMISSIONS ---"
+      tags: users
+      block:
+        - name: Create groups
+          ansible.builtin.group:
+            name: "{{ item }}"
+            state: present
+            system: yes
+          loop:
+            - tole_app
+            - monitoring
+
+        - name: Create service users
+          ansible.builtin.user:
+            name: "{{ item.name }}"
+            group: "{{ item.group }}"
+            system: yes
+            shell: /bin/false
+            create_home: no
+          loop:
+            - { name: 'tole', group: 'tole_app' }
+            - { name: 'prometheus', group: 'monitoring' }
+            - { name: 'grafana', group: 'monitoring' }
+
+        - name: Create automation_bot
+          ansible.builtin.user:
+            name: automation_bot
+            shell: /bin/bash
+            state: present
+            create_home: yes
+
+        - name: Create directories
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: directory
+            owner: "{{ item.owner }}"
+            group: "{{ item.group }}"
+            mode: "{{ item.mode }}"
+          loop:
+            - { path: '/var/www/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/var/log/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/etc/tole', owner: 'tole', group: 'tole_app', mode: '0775' }
+            - { path: '/var/lib/prometheus', owner: 'prometheus', group: 'monitoring', mode: '0755' }
+            - { path: '/etc/prometheus', owner: 'prometheus', group: 'monitoring', mode: '0755' }
+            - { path: '/var/lib/grafana', owner: 'grafana', group: 'monitoring', mode: '0755' }
+            - { path: '/etc/grafana', owner: 'grafana', group: 'monitoring', mode: '0755' }
+            - { path: '/opt/scripts', owner: 'root', group: 'root', mode: '0755' }
+
+    - name: "--- SIS 3: PACKAGES AND FIREWALL ---"
+      tags: packages
+      block:
+        - name: Install system packages
+          ansible.builtin.apt:
+            name:
+              - build-essential
+              - python3-pip
+              - python3-dev
+              - mysql-server
+              - libmysqlclient-dev
+              - pkg-config
+              - ufw
+              - wget
+            state: present
+            update_cache: yes
+
+        - name: Install Python packages
+          ansible.builtin.pip:
+            name:
+              - django
+              - gunicorn
+              - mysqlclient
+              - prometheus-client
+            executable: pip3
+            state: present
+            extra_args: --break-system-packages
+
+        - name: Download and unarchive Prometheus
+          ansible.builtin.unarchive:
+            src: "https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz"
+            dest: /tmp/
+            remote_src: yes
+            creates: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus"
+
+        # We use shell here because unarchive handling of wildcards/dirs is tricky
+        - name: Install Prometheus Binaries
+          shell: |
+            mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus /usr/local/bin/
+            mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/promtool /usr/local/bin/
+            mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/prometheus.yml /etc/prometheus/
+            chown prometheus:monitoring /usr/local/bin/prometheus
+            chown prometheus:monitoring /usr/local/bin/promtool
+          args:
+            creates: /usr/local/bin/prometheus
+
+        - name: Download and unarchive Grafana
+          ansible.builtin.unarchive:
+            src: "https://dl.grafana.com/oss/release/grafana-{{ grafana_version }}.linux-amd64.tar.gz"
+            dest: /tmp/
+            remote_src: yes
+
+        - name: Install Grafana Binaries
+          shell: |
+            mv /tmp/grafana-*/bin/grafana /usr/local/bin/
+            mv /tmp/grafana-*/bin/grafana-server /usr/local/bin/
+            mv /tmp/grafana-*/bin/grafana-cli /usr/local/bin/
+            chown -R grafana:monitoring /usr/local/bin/grafana*
+          args:
+            creates: /usr/local/bin/grafana-server
+
+    - name: "--- SIS 4: SERVICES AND CRON ---"
+      tags: services
+      block:
+        - name: Create Gunicorn Service File
+          copy:
+            dest: "/etc/systemd/system/tole-gunicorn.service"
+            content: |
+              [Unit]
+              Description=TOLE Gunicorn Daemon
+              After=network.target
+              [Service]
+              User=tole
+              Group=tole_app
+              WorkingDirectory=/var/www/tole
+              ExecStart=/usr/local/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 tole_project.wsgi:application
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Create Prometheus Service File
+          copy:
+            dest: "/etc/systemd/system/prometheus.service"
+            content: |
+              [Unit]
+              Description=Prometheus Monitoring
+              Wants=network-online.target
+              After=network-online.target
+              [Service]
+              User=prometheus
+              Group=monitoring
+              Type=simple
+              ExecStart=/usr/local/bin/prometheus --config.file /etc/prometheus/prometheus.yml --storage.tsdb.path /var/lib/prometheus/
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Create Grafana Service File
+          copy:
+            dest: "/etc/systemd/system/grafana-server.service"
+            content: |
+              [Unit]
+              Description=Grafana Server
+              After=network.target
+              [Service]
+              User=grafana
+              Group=monitoring
+              Type=simple
+              ExecStart=/usr/local/bin/grafana-server -homepath /usr/local/share/grafana -config /etc/grafana/grafana.ini
+              Restart=on-failure
+              [Install]
+              WantedBy=multi-user.target
+          notify: reload systemd
+
+        - name: Ensure services are started
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            state: started
+            enabled: yes
+          loop:
+            - tole-gunicorn
+            - prometheus
+            - grafana-server
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
