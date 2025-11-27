@@ -1,31 +1,26 @@
 name: Deploy Config to WSL
 
-# Trigger the pipeline whenever you push to the 'main' branch
+# Trigger on push to main or master
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "master" ]
 
 jobs:
-  ansible-deploy:
-    # IMPORTANT: This tells GitHub to run this job on YOUR computer, not their servers
-    runs-on: self-hosted
+  ansible-test-deploy:
+    # UPDATED: Use GitHub's hosted Ubuntu runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Verify Ansible is Installed
+      - name: Install Ansible
         run: |
-          if ! command -v ansible &> /dev/null; then
-            echo "Ansible not found. Installing..."
-            sudo apt-get update
-            sudo apt-get install -y ansible
-          else
-            echo "Ansible is already installed."
-          fi
+          sudo apt-get update
+          sudo apt-get install -y ansible
 
       - name: Run SIS 5 Playbook
-        # We use sudo because your playbook modifies system services and users
+        # This runs the playbook against the Cloud VM to verify it works
         run: |
-          echo "Starting Ansible Playbook..."
+          echo "Starting Ansible Playbook validation..."
           sudo ansible-playbook sis5_playbook.yml
