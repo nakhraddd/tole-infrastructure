@@ -1,0 +1,26 @@
+name: Deploy Config to WSL
+
+# Trigger on push to main or master
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  ansible-test-deploy:
+    # UPDATED: Use GitHub's hosted Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Run SIS 5 Playbook
+        # This runs the playbook against the Cloud VM to verify it works
+        run: |
+          echo "Starting Ansible Playbook validation..."
+          sudo ansible-playbook sis5_playbook.yml
