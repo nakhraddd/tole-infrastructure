@@ -1,4 +1,4 @@
-name: Deploy Config to WSL
+name: Deploy Config
 
 # Trigger on push to main or master
 on:
