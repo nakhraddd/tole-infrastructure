@@ -1,6 +1,6 @@
 - name: Set up Journalling and Auditing
-  hosts: all
-  become: yes
+  hosts: localhost
+  gather_facts: yes
   tasks:
     - name: Display a message
       debug:
@@ -13,24 +13,22 @@
       loop:
         - auditd
         - audispd-plugins
-      tags: packages
 
     - name: Ensure journald is configured for persistent storage
       lineinfile:
         path: /etc/systemd/journald.conf
         regexp: '^#?Storage='
         line: 'Storage=persistent'
-        create: yes
-        backrefs: no
-      notify: Restart systemd-journald
+        state: present
+      notify: restart systemd-journald
 
     - name: Tune journald max use (optional)
       lineinfile:
         path: /etc/systemd/journald.conf
         regexp: '^#?SystemMaxUse='
         line: 'SystemMaxUse=500M'
-        create: yes
-      notify: Restart systemd-journald
+        state: present
+      notify: restart systemd-journald
 
     - name: Deploy audit rules for sudoers changes
       copy:
@@ -38,41 +36,39 @@
         dest: /etc/audit/rules.d/99-sudoers.rules
         owner: root
         group: root
-        mode: '0640'
-      notify: Restart auditd
+        mode: '0644'
+      notify: restart auditd
 
     - name: Ensure audisp syslog plugin is active (send audit to syslog/journal)
       lineinfile:
         path: /etc/audisp/plugins.d/syslog.conf
-        regexp: '^#?active ='
+        regexp: '^active = '
         line: 'active = yes'
-        create: yes
-      notify: Restart auditd
+        state: present
+      notify: restart auditd
 
     - name: Deploy journal helper scripts
       copy:
-        src: tole_project/scripts/
-        dest: /usr/local/bin/
+        src: "tole_project/scripts/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
         owner: root
         group: root
         mode: '0755'
-      notify: none
-
-    - name: Ensure scripts are executable
-      file:
-        path: /usr/local/bin
-        recurse: yes
-        mode: '0755'
+      loop:
+        - journal_search.sh
+        - journal_filter_services.sh
+        - journal_watch_alert.sh
 
   handlers:
-    - name: Restart systemd-journald
-      service:
+    - name: restart systemd-journald
+      systemd:
         name: systemd-journald
         state: restarted
-        enabled: yes
+        daemon_reload: yes
+      become: yes
 
-    - name: Restart auditd
-      service:
+    - name: restart auditd
+      systemd:
         name: auditd
         state: restarted
-        enabled: yes
+      become: yes
