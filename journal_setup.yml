@@ -16,7 +16,7 @@
 
     - name: Ensure journald is configured for persistent storage
       lineinfile:
-        path: /etc/systemd/journald.conf
+        path: /etc/audit/plugins.d/syslog.conf
         regexp: '^#?Storage='
         line: 'Storage=persistent'
         state: present
