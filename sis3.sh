@@ -10,7 +10,8 @@ sudo apt-get update
 echo "Installing system packages..."
 # Added 'pkg-config' (required for mysqlclient)
 sudo apt-get install -y build-essential python3-pip python3-dev \
-    mysql-server libmysqlclient-dev ufw wget pkg-config
+    mariadb-server mariadb-client libmariadb-dev libmariadb-dev-compat \
+    ufw wget pkg-config
 
 echo "Installing Python packages..."
 # Using --break-system-packages to bypass PEP 668 on Ubuntu 24.04
