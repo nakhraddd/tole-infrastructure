@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ansible
 
-      - name: Run SIS 5 Playbook
+      - name: Run Playbook
         # This runs the playbook against the Cloud VM to verify it works
         run: |
           echo "Starting Ansible Playbook validation..."
