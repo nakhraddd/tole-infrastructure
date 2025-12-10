@@ -26,7 +26,7 @@ resource "google_compute_instance" "tole_vm" {
   name         = "${var.prefix}-vm"
   machine_type = "e2-medium" 
   zone         = var.location
-  # Boot disk configuration (using Debian 11/Bullseye which is close to your current setup)
+  metadata_startup_script = "echo '${var.vm_username}:${var.vm_password}' | chpasswd && sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config && systemctl restart ssh"
   boot_disk {
     initialize_params {
       image = "debian-cloud/debian-11"
@@ -74,4 +74,17 @@ resource "google_compute_instance" "tole_vm" {
 
   # Enable the created user for SSH authentication
   allow_stopping_for_update = true
+}
+
+# 3. Create a Firewall Rule to allow SSH and Web traffic
+resource "google_compute_firewall" "allow_rules" {
+  name    = "${var.prefix}-allow-ssh-web"
+  network = google_compute_network.vpc_network.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "80", "443", "8000", "3000", "9090"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
 }
