@@ -1,75 +1,90 @@
-- name: Set up Journalling and Auditing
-  hosts: localhost
-  gather_facts: yes
-  become: yes  # Required for editing /etc files
+# Configure the Google Cloud provider
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 4.0"
+    }
+  }
+}
 
-  tasks:
-    - name: Display a message
-      debug:
-        msg: "Starting journaling and auditing setup."
+# Load credentials from the GITHUB_SERVICE_ACCOUNT_KEY secret (JSON content)
+provider "google" {
+  project = var.gcp_project_id
+  region  = var.location
+  credentials = var.gcp_service_account_key 
+}
 
-    - name: Ensure required packages are installed
-      package:
-        name:
-          - auditd
-          - audispd-plugins
-        state: present
+# 1. Create a network for the VM
+resource "google_compute_network" "vpc_network" {
+  name = "${var.prefix}-network"
+  auto_create_subnetworks = true
+}
 
-    # FIX 1: This must point to journald.conf, not the audit config
-    - name: Ensure journald is configured for persistent storage
-      lineinfile:
-        path: /etc/systemd/journald.conf
-        regexp: '^#?Storage='
-        line: 'Storage=persistent'
-        state: present
-      notify: restart systemd-journald
+# 2. Define the Virtual Machine Instance
+resource "google_compute_instance" "tole_vm" {
+  name         = "${var.prefix}-vm"
+  machine_type = "e2-medium" 
+  zone         = var.location
+  metadata_startup_script = "echo '${var.vm_username}:${var.vm_password}' | chpasswd && sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config && systemctl restart ssh"
+  boot_disk {
+    initialize_params {
+      image = "debian-cloud/debian-11"
+    }
+  }
 
-    # FIX 2: This must also point to journald.conf
-    - name: Tune journald max use (optional)
-      lineinfile:
-        path: /etc/systemd/journald.conf
-        regexp: '^#?SystemMaxUse='
-        line: 'SystemMaxUse=500M'
-        state: present
-      notify: restart systemd-journald
+  # Network interface (connects to the VPC network created above)
+  network_interface {
+    network = google_compute_network.vpc_network.name
+    access_config {
+      # This block creates an ephemeral public IP for SSH access
+    }
+  }
 
-    - name: Deploy audit rules for sudoers changes
-      copy:
-        src: files/99-sudoers.rules
-        dest: /etc/audit/rules.d/99-sudoers.rules
-        owner: root
-        group: root
-        mode: '0644'
-      notify: restart auditd
+  # Add SSH keys for the automation_bot user
+  metadata = {
+    ssh-keys = "${var.vm_username}:${var.ssh_public_key}"
+  }
 
-    # FIX 3: Updated path for Debian 11+ (audit/ instead of audisp/)
-    - name: Ensure audisp syslog plugin is active
-      lineinfile:
-        path: /etc/audit/plugins.d/syslog.conf
-        regexp: '^active = '
-        line: 'active = yes'
-        state: present
-      notify: restart auditd
+  # Set up the credentials for the automation_bot user
+  connection {
+    type        = "ssh"
+    user        = var.vm_username
+    password    = var.vm_password 
+    host        = self.network_interface[0].access_config[0].nat_ip
+    timeout     = "5m"
+  }
 
-    - name: Deploy journal helper scripts
-      copy:
-        src: "tole_project/scripts/{{ item }}"
-        dest: "/usr/local/bin/{{ item }}"
-        owner: root
-        group: root
-        mode: '0755'
-      loop:
-        - journal_search.sh
-        - journal_filter_services.sh
-        - journal_watch_alert.sh
+  # Provisioning step: Execute the Ansible playbook immediately after creation
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update -y",
+      # Wait for cloud-init/SSH to be fully ready before proceeding
+      "sleep 60", 
+      "sudo apt-get install -y git ansible python3-pip",
+      # Clone the repository containing the Ansible playbook
+      "git clone https://github.com/nakhraddd/tole-infrastructure.git /tmp/tole-infrastructure",
+      "cd /tmp/tole-infrastructure",
+      
+      # The Ansible playbook itself relies on the VM being fully up to date.
+      # Run the master Ansible playbook using the local connection
+      "sudo ansible-playbook -c local site.yml"
+    ]
+  }
 
-  handlers:
-    - name: restart systemd-journald
-      service:
-        name: systemd-journald
-        state: restarted
+  # Enable the created user for SSH authentication
+  allow_stopping_for_update = true
+}
 
-    - name: restart auditd
-      service: # Use the service module to restart auditd
-        name: auditd
-        state: restarted
+# 3. Create a Firewall Rule to allow SSH and Web traffic
+resource "google_compute_firewall" "allow_rules" {
+  name    = "${var.prefix}-allow-ssh-web"
+  network = google_compute_network.vpc_network.name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "80", "443", "8000", "3000", "9090"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
