@@ -49,7 +49,7 @@
             mode: '0644'
 
     # --- NEW FIX: Ensure Grafana Data Directory is Writeable ---
-    - name: 0. FIX: Ensure Grafana /var/lib/grafana is fully owned by Grafana user
+    - name: 0. FIX Ensure Grafana /var/lib/grafana is fully owned by Grafana user
       ansible.builtin.file:
         path: /var/lib/grafana
         state: directory
