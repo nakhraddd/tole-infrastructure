@@ -48,11 +48,21 @@
             group: monitoring
             mode: '0644'
 
+    # --- NEW FIX: Ensure Grafana Data Directory is Writeable ---
+    - name: 0. FIX: Ensure Grafana /var/lib/grafana is fully owned by Grafana user
+      ansible.builtin.file:
+        path: /var/lib/grafana
+        state: directory
+        owner: grafana
+        group: monitoring
+        mode: '0755'
+        recurse: yes
+    
     # --- ORIGINAL SIS 4 TASKS ---
     - name: "--- SIS 4: SERVICES AND CRON ---"
       tags: services
       block:
-        # (Rest of the service file creation tasks remain the same, ensuring they are notified to reload)
+        # (Service file creation tasks remain the same)
 
         - name: Create Gunicorn Service File
           copy:
