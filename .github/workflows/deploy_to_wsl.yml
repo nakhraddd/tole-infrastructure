@@ -23,4 +23,4 @@ jobs:
         # This runs the playbook against the Cloud VM to verify it works
         run: |
           echo "Starting Ansible Playbook validation..."
-          sudo ansible-playbook sis5_playbook.yml
+          sudo ansible-playbook -i 'localhost,' -c local journal_setup.yml --become
