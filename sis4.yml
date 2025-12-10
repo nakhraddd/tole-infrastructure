@@ -2,11 +2,58 @@
   hosts: localhost
   connection: local
   become: yes
+  vars:
+    grafana_version: "11.1.0" # Needed for the new Grafana Asset task
 
   tasks:
+    # --- DEPLOYMENT FIXES ---
+    - name: 0. Deploy Django Project (Required for Gunicorn to start)
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/var/www/tole/"
+        owner: tole
+        group: tole_app
+        mode: '0755'
+      loop:
+        - tole_project
+        - manage.py
+      # Note: This assumes your current user (dtastanov24) has access to these files in the local repo.
+
+    - name: 0. Install Grafana Assets and Config (Required for Grafana to start)
+      block:
+        # A. Unarchive the Grafana package again to access the nested folders (if needed)
+        - name: Download and Unarchive Grafana Assets
+          ansible.builtin.unarchive:
+            src: "https://dl.grafana.com/oss/release/grafana-{{ grafana_version }}.linux-amd64.tar.gz"
+            dest: /tmp/
+            remote_src: yes
+
+        # B. Move the assets to the location specified in the systemd file (-homepath)
+        - name: Move Grafana Assets
+          shell: |
+            # Move public/ and conf/ folders (wildcard needed for folder name: grafana-v11.1.0)
+            mv /tmp/grafana-*/public /usr/local/share/grafana/
+            mv /tmp/grafana-*/conf /usr/local/share/grafana/
+            chown -R grafana:monitoring /usr/local/share/grafana
+          args:
+            creates: /usr/local/share/grafana/public
+
+        # C. Ensure the required grafana.ini file is in /etc/grafana/
+        - name: Copy default config to /etc/grafana/
+          ansible.builtin.copy:
+            src: /usr/local/share/grafana/conf/defaults.ini
+            dest: /etc/grafana/grafana.ini
+            remote_src: yes
+            owner: grafana
+            group: monitoring
+            mode: '0644'
+
+    # --- ORIGINAL SIS 4 TASKS ---
     - name: "--- SIS 4: SERVICES AND CRON ---"
       tags: services
       block:
+        # (Rest of the service file creation tasks remain the same, ensuring they are notified to reload)
+
         - name: Create Gunicorn Service File
           copy:
             dest: "/etc/systemd/system/tole-gunicorn.service"
