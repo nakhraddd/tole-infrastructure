@@ -24,7 +24,7 @@
 
     - name: Tune journald max use (optional)
       lineinfile:
-        path: /etc/systemd/journald.conf
+        path: /etc/audit/plugins.d/syslog.conf
         regexp: '^#?SystemMaxUse='
         line: 'SystemMaxUse=500M'
         state: present
