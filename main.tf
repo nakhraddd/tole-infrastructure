@@ -25,8 +25,7 @@ resource "google_compute_network" "vpc_network" {
 resource "google_compute_instance" "tole_vm" {
   name         = "${var.prefix}-vm"
   machine_type = "e2-medium" 
-  zone         = "us-east1-b" # Specific zone required for instance creation
-
+  zone         = var.location
   # Boot disk configuration (using Debian 11/Bullseye which is close to your current setup)
   boot_disk {
     initialize_params {
