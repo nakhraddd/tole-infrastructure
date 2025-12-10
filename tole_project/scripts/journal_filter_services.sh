@@ -1,19 +1,6 @@
 #!/bin/bash
-# Filter journal by one or more systemd services.
-if [ "$#" -lt 1 ]; then
-  echo "Usage: $0 service_name [service_name2 ...] [SINCE]"
-  echo "Example: $0 sshd nginx '2h'"
-  exit 1
-fi
+# Script to filter logs specifically for TOLE related services
 
-# Last argument may be a SINCE spec if it looks like time (contains digits or h/d)
-SINCE="-1h"
-if [[ "$@" =~ [0-9]+[smhd]?$ ]]; then
-  SINCE="${!#}"
-  set -- "${@:1:$(($#-1))}"
-fi
-
-for svc in "$@"; do
-  echo "--- Logs for service: $svc (since $SINCE) ---"
-  journalctl -u "$svc" -S "$SINCE" -o short-iso | tail -n +1
-done
+echo "Showing last 50 log lines for TOLE application services..."
+# Filters logs for the three main services defined in the SIS 4 unit files.
+journalctl -u tole-gunicorn.service -u prometheus.service -u grafana-server.service -n 50 --no-pager

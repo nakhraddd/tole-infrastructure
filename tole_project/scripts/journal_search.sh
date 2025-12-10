@@ -1,11 +1,10 @@
 #!/bin/bash
-# Simple journal search helper
+# Script to search journalctl logs easily
+
+echo "Searching journal for service status messages..."
 if [ -z "$1" ]; then
-  echo "Usage: $0 PATTERN [SINCE]"
-  echo "Example: $0 'Failed password' '1d'"
-  exit 1
+    echo "Usage: $0 <search_term>"
+    journalctl -n 20 --output=short-iso
+else
+    journalctl -u tole-gunicorn.service -u prometheus.service -u grafana-server.service --since "1 hour ago" | grep -i "$1"
 fi
-PATTERN="$1"
-SINCE="${2:--1h}"
-echo "Searching journal since $SINCE for pattern: $PATTERN"
-journalctl -S "$SINCE" -o short-iso | grep -E --color=auto "$PATTERN"
