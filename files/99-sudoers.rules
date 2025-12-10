@@ -1,0 +1,4 @@
+## Audit rule: watch sudoers and sudoers.d for writes and attribute changes
+# Key: sudoers_change
+-w /etc/sudoers -p wa -k sudoers_change
+-w /etc/sudoers.d -p wa -k sudoers_change

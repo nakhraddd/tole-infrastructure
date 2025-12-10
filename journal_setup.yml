@@ -5,3 +5,74 @@
     - name: Display a message
       debug:
         msg: "Starting journaling and auditing setup."
+
+    - name: Ensure required packages are installed (auditd, audispd-plugins)
+      package:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - auditd
+        - audispd-plugins
+      tags: packages
+
+    - name: Ensure journald is configured for persistent storage
+      lineinfile:
+        path: /etc/systemd/journald.conf
+        regexp: '^#?Storage='
+        line: 'Storage=persistent'
+        create: yes
+        backrefs: no
+      notify: Restart systemd-journald
+
+    - name: Tune journald max use (optional)
+      lineinfile:
+        path: /etc/systemd/journald.conf
+        regexp: '^#?SystemMaxUse='
+        line: 'SystemMaxUse=500M'
+        create: yes
+      notify: Restart systemd-journald
+
+    - name: Deploy audit rules for sudoers changes
+      copy:
+        src: files/99-sudoers.rules
+        dest: /etc/audit/rules.d/99-sudoers.rules
+        owner: root
+        group: root
+        mode: '0640'
+      notify: Restart auditd
+
+    - name: Ensure audisp syslog plugin is active (send audit to syslog/journal)
+      lineinfile:
+        path: /etc/audisp/plugins.d/syslog.conf
+        regexp: '^#?active ='
+        line: 'active = yes'
+        create: yes
+      notify: Restart auditd
+
+    - name: Deploy journal helper scripts
+      copy:
+        src: tole_project/scripts/
+        dest: /usr/local/bin/
+        owner: root
+        group: root
+        mode: '0755'
+      notify: none
+
+    - name: Ensure scripts are executable
+      file:
+        path: /usr/local/bin
+        recurse: yes
+        mode: '0755'
+
+  handlers:
+    - name: Restart systemd-journald
+      service:
+        name: systemd-journald
+        state: restarted
+        enabled: yes
+
+    - name: Restart auditd
+      service:
+        name: auditd
+        state: restarted
+        enabled: yes
