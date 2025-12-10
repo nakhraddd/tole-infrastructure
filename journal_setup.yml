@@ -1,0 +1,7 @@
+- name: Set up Journalling and Auditing
+  hosts: all
+  become: yes
+  tasks:
+    - name: Display a message
+      debug:
+        msg: "Starting journaling and auditing setup."
