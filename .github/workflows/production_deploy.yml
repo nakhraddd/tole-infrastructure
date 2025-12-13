@@ -21,7 +21,7 @@ jobs:
       - name: Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PUBLIC_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           # Add the VM to known_hosts to avoid "Are you sure?" prompt
           ssh-keyscan -H ${{ secrets.GCP_VM_IP }} >> ~/.ssh/known_hosts
@@ -35,4 +35,4 @@ jobs:
       - name: Run Ansible Playbook (Heal & Deploy)
         run: |
           echo "Connecting to GCP VM to ensure services are running..."
-          ansible-playbook -i inventory.ini site.yml
+          ansible-playbook -i inventory.ini journal_setup.yml

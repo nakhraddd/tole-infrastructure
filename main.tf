@@ -68,7 +68,7 @@ resource "google_compute_instance" "tole_vm" {
       
       # The Ansible playbook itself relies on the VM being fully up to date.
       # Run the master Ansible playbook using the local connection
-      "sudo ansible-playbook -c local site.yml"
+      "sudo ansible-playbook -c local journal_setup.yml"
     ]
   }
 
