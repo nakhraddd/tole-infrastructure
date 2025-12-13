@@ -1,5 +1,5 @@
 - name: Set up Journalling and Auditing
-  hosts: localhost
+  hosts: all
   gather_facts: yes
   become: yes  # Required for editing /etc files
 
