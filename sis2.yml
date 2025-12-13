@@ -1,6 +1,5 @@
 - name: SIS 2 - Users and Permissions
-  hosts: localhost
-  connection: local
+  hosts: all
   become: yes
 
   tasks:

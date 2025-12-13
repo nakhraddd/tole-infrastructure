@@ -1,6 +1,5 @@
 - name: SIS 4 - Services and Cron
-  hosts: localhost
-  connection: local
+  hosts: all
   become: yes
   vars:
     grafana_version: "11.1.0" # Needed for the new Grafana Asset task

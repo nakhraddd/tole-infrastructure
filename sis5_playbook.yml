@@ -1,6 +1,5 @@
 - name: Provision TOLE Project Server
-  hosts: localhost
-  connection: local
+  hosts: all
   become: yes
   vars:
     prometheus_version: "2.53.1"

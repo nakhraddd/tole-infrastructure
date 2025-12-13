@@ -1,0 +1,38 @@
+name: Production Deploy & Heal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  deploy-to-gcp:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          # Add the VM to known_hosts to avoid "Are you sure?" prompt
+          ssh-keyscan -H ${{ secrets.GCP_VM_IP }} >> ~/.ssh/known_hosts
+
+      - name: Create Inventory File
+        run: |
+          echo "[webserver]" > inventory.ini
+          echo "${{ secrets.GCP_VM_IP }} ansible_user=automation_bot ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory.ini
+          cat inventory.ini
+
+      - name: Run Ansible Playbook (Heal & Deploy)
+        run: |
+          echo "Connecting to GCP VM to ensure services are running..."
+          ansible-playbook -i inventory.ini site.yml
